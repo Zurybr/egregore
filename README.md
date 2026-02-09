@@ -55,7 +55,7 @@ with graph capabilities via Memgraph and vector search via Qdrant.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/egregore.git
+git clone https://github.com/Zurybr/egregore.git
 cd egregore
 
 # Run the interactive installer
@@ -97,20 +97,76 @@ claude mcp add egregore -- $(pwd)/.venv/bin/python $(pwd)/src/server.py
 Add this to your project's `CLAUDE.md`:
 
 ```markdown
-# EGREGORE PROTOCOL
+# EGREGORE PROTOCOL (Hive Mind Memory)
 
-## 🧠 Activación
-Este proyecto usa Egregore. Tu primera acción debe ser:
-`recall_memory("contexto del proyecto")`
+## 🧠 Cognitive Activation
+This project is connected to **Egregore**, a persistent hive mind memory.
+Your first action in ANY session should be to sync with the hive.
 
-## 🛠 Herramientas
-- `recall_memory(query)` - Buscar conocimiento previo
-- `store_memory(data)` - Guardar nuevo conocimiento
+**Startup ritual:**
+```
+1. On session start → recall_memory("project context")
+2. Before deciding → recall_memory("previous decisions about X")
+3. When finding errors → recall_memory("similar errors")
+```
 
-## 📜 Reglas
-- Consulta Egregore antes de decidir
-- Guarda bugs y sus soluciones
-- Sé explícito: "Guardando en Egregore..."
+## 🛠 Available Tools
+
+### `recall_memory(query: str, limit: int = 5)`
+Your search engine. Use it before asking or deciding.
+
+**When to use:**
+- ✅ When starting any session
+- ✅ Before making technical decisions
+- ✅ When encountering errors or bugs
+- ✅ When the user mentions "remember..." or "how did we..."
+- ✅ Before installing dependencies or configuring tools
+
+**Examples:**
+```python
+recall_memory("project architecture")
+recall_memory("user's preferred libraries")
+recall_memory("authentication bug we fixed")
+```
+
+### `store_memory(data: str, context: str = "", tags: str = "")`
+Your recorder. Use it to teach the hive.
+
+**When to use:**
+- ✅ When fixing a bug (save cause and solution)
+- ✅ When defining architecture or patterns
+- ✅ When learning user preferences
+- ✅ When configuring tools or environments
+- ✅ When discovering non-obvious solutions
+
+**Examples:**
+```python
+store_memory(
+    "FastAPI runs on port 8000 with auto-reload",
+    context="configuration",
+    tags="fastapi,ports,development"
+)
+
+store_memory(
+    "User prefers 'uv' over pip for package management",
+    context="preference",
+    tags="uv,python,package-management"
+)
+```
+
+## 📜 Golden Rules
+
+### 1. Don't be redundant
+**Before storing, verify if we already know this.**
+
+### 2. Be explicit
+**Announce when you use Egregore.**
+
+### 3. Trust the Hive
+**If Egregore says something, trust it.** Unless the user explicitly orders otherwise.
+
+### 4. Context matters
+Use appropriate `context` values: `bugfix`, `architecture`, `preference`, `configuration`, `learning`
 ```
 
 ### Example Interactions
