@@ -519,7 +519,7 @@ EOF
 # ==================== STEP 5: CLAUDE CODE INTEGRATION ====================
 
 install_claude_mcp() {
-    step "Step 5/6: Installing Claude Code MCP Client"
+    step "Step 5/7: Installing Claude Code MCP Client"
 
     # For remote server, skip local MCP configuration
     if [ "$IS_REMOTE" = true ]; then
@@ -627,7 +627,60 @@ PYTHON_EOF
     fi
 }
 
-# ==================== STEP 6: FINAL INSTRUCTIONS ====================
+# ==================== STEP 6: CLAUDE CODE SKILL ====================
+
+install_claude_skill() {
+    step "Step 6/7: Installing Claude Code Egregore Skill"
+
+    # For remote server, skip skill installation
+    if [ "$IS_REMOTE" = true ]; then
+        info "Skipping skill installation for remote server"
+        return 0
+    fi
+
+    local skills_dir="$HOME/.claude/skills"
+    local skill_name="egregore"
+    local skill_source="./skill-egregore"
+    local skill_dest="$skills_dir/$skill_name"
+
+    # Check if skill source exists
+    if [ ! -d "$skill_source" ]; then
+        warn "Skill source directory not found: $skill_source"
+        warn "Skipping skill installation"
+        return 0
+    fi
+
+    # Create skills directory if it doesn't exist
+    if [ ! -d "$skills_dir" ]; then
+        info "Creating skills directory: $skills_dir"
+        mkdir -p "$skills_dir"
+    fi
+
+    # Remove existing skill if present
+    if [ -d "$skill_dest" ]; then
+        info "Removing existing skill: $skill_dest"
+        rm -rf "$skill_dest"
+    fi
+
+    # Copy skill to destination
+    info "Installing Egregore skill to $skill_dest"
+    if cp -r "$skill_source" "$skill_dest"; then
+        success "Egregore skill installed successfully"
+        echo ""
+        echo -e "${CYAN}The Egregore skill is now available in Claude Code.${NC}"
+        echo -e "${CYAN}Use: /egregore or invoke it directly${NC}"
+    else
+        warn "Failed to install skill"
+        echo ""
+        echo -e "${YELLOW}Manual installation required:${NC}"
+        echo ""
+        echo "Copy the skill directory to your Claude skills folder:"
+        echo "  cp -r $skill_source $skill_dest"
+        echo ""
+    fi
+}
+
+# ==================== STEP 7: FINAL INSTRUCTIONS ====================
 
 show_final_instructions() {
     # Skip detailed instructions for remote server (already shown)
@@ -728,6 +781,7 @@ main() {
     deploy_infrastructure
     start_sse_server
     install_claude_mcp
+    install_claude_skill
     show_final_instructions
 }
 
