@@ -1,177 +1,145 @@
-# EGREGORE PROTOCOL (Memoria Compartida)
+# CLAUDE.md
 
-> **Egregore** - Sistema de memoria persistente tipo "Hive Mind" para Claude Code.
-> Este archivo activa la memoria compartida en tu proyecto.
-
----
-
-## 🧠 Activación Cognitiva
-
-Este proyecto está conectado a **Egregore**, una memoria de colmena persistente.
-Tu primera acción en CUALQUIER sesión debe ser sincronizarte con la colmena.
-
-**Ritual de inicio:**
-```
-1. Al iniciar sesión → recall_memory("contexto del proyecto")
-2. Antes de decidir → recall_memory("decisiones previas sobre X")
-3. Al encontrar errores → recall_memory("errores similares")
-```
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ---
 
-## 🛠 Herramientas Disponibles
+## Development Commands
 
-### `recall_memory(query: str, limit: int = 5)`
-Tu buscador. Úsalo antes de preguntar o decidir.
+```bash
+# Install dependencies (uses uv package manager)
+uv pip install -e "."
 
-**Cuándo usar:**
-- ✅ Al iniciar cualquier sesión
-- ✅ Antes de tomar decisiones técnicas
-- ✅ Al encontrar errores o bugs
-- ✅ Cuando el usuario menciona "recuerdas..." o "como hicimos..."
-- ✅ Antes de instalar dependencias o configurar herramientas
+# Run tests
+uv run pytest
 
-**Ejemplos:**
-```python
-recall_memory("arquitectura de este proyecto")
-recall_memory("librerías preferidas por el usuario")
-recall_memory("bug con autenticación que solucionamos")
-```
+# Run single test
+uv run pytest tests/test_graph_client.py::test_init
 
----
+# Type checking
+uv run mypy src/
 
-### `store_memory(data: str, context: str = "", tags: str = "")`
-Tu grabadora. Úsalo para enseñar a la colmena.
+# Linting (check)
+uv run ruff check src/
 
-**Cuándo usar:**
-- ✅ Al solucionar un bug (guarda causa y solución)
-- ✅ Al definir arquitectura o patrones
-- ✅ Al aprender preferencias del usuario
-- ✅ Al configurar herramientas o entornos
-- ✅ Al descubrir soluciones no obvias
+# Linting (format)
+uv run ruff format src/
 
-**Ejemplos:**
-```python
-store_memory(
-    "La API FastAPI corre en puerto 8000 con reload automático",
-    context="configuration",
-    tags="fastapi,ports,development"
-)
+# Start infrastructure (Memgraph + Qdrant)
+docker-compose up -d
 
-store_memory(
-    "Usuario prefiere usar 'uv' en lugar de pip para gestión de paquetes",
-    context="preference",
-    tags="uv,python,package-management"
-)
+# View infrastructure logs
+docker-compose logs -f
+
+# Reset all data (⚠️ destroys all memories)
+docker-compose down -v
+
+# Start the web dashboard
+streamlit run src/dashboard.py
+# or
+egregore-dashboard
+
+# Test the MCP server manually
+python -m src.server
 ```
 
 ---
 
-## 📜 Reglas de Oro
+## Architecture Overview
 
-### 1. No seas redundante
-**Antes de guardar, verifica si ya lo sabemos.**
+Egregore is a dual-path memory system with two separate access patterns:
 
-```python
-# MAL: Guardar sin verificar
-store_memory("Usamos Python 3.13")
+### Path 1: MCP Integration (Claude Code)
+- **Entry point:** `src/server.py` (FastMCP server)
+- **Client:** `src/memory.py` (Mem0 wrapper)
+- **Purpose:** Semantic search + graph-based memory storage via Mem0
+- **Tools:** `recall_memory()`, `store_memory()`, `health_check()`
+- **Flow:** Claude Code → FastMCP → Mem0 → (Memgraph + Qdrant)
 
-# BIEN: Verificar primero
-memories = recall_memory("versión de Python usada")
-if "3.13" not in str(memories):
-    store_memory("Proyecto usa Python 3.13 con uv")
+### Path 2: Web Dashboard (Direct Access)
+- **Entry point:** `src/dashboard.py` (Streamlit app)
+- **Client:** `src/graph_client.py` (direct Neo4j driver to Memgraph)
+- **Purpose:** Visual graph exploration, CRUD operations, statistics
+- **Flow:** Dashboard → Neo4j driver → Memgraph (bypasses Mem0)
+
+**Key architectural decision:** The dashboard bypasses Mem0 entirely and queries Memgraph directly via Cypher queries. This is intentional - Mem0's graph operations are limited, so direct Cypher access provides more flexibility for the dashboard visualization and CRUD operations.
+
+### Data Flow
+
 ```
-
-### 2. Sé explícito
-**Anuncia cuando usas Egregore.**
-
-```
-✅ "Consultando Egregore sobre la arquitectura..."
-✅ "Guardando en Egregore: La base de datos es PostgreSQL"
-✅ "Egregore indica que preferimos pydantic v2"
-```
-
-### 3. Confía en la Colmena
-**Si Egregore dice algo, confía en ello.**
-
-```python
-# Egregore dice: "Usamos FastAPI con async/await"
-# Aunque normalmente usarías Flask, sigue la indicación de Egregore.
-```
-
-**Excepción:** Si el usuario te ordena explícitamente hacer algo diferente,
-sigue sus instrucciones y guarda el cambio como nueva preferencia.
-
-### 4. Contexto es clave
-**Usa el parámetro `context` apropiadamente:**
-
-| Contexto | Uso |
-|----------|-----|
-| `bugfix` | Soluciones a errores |
-| `architecture` | Decisiones de diseño |
-| `preference` | Preferencias del usuario |
-| `configuration` | Configuraciones del proyecto |
-| `learning` | Cosas aprendidas |
-
----
-
-## 🔧 Troubleshooting
-
-### "No puedo conectar con Egregore"
-1. Verifica que los servicios Docker estén corriendo:
-   ```bash
-   docker-compose ps
-   ```
-2. Verifica que el MCP esté registrado:
-   ```bash
-   claude mcp list
-   ```
-
-### "Las herramientas no aparecen"
-1. Reinicia Claude Code
-2. Verifica la configuración MCP:
-   ```bash
-   claude config get mcpServers
-   ```
-
----
-
-## 📚 Plantillas Rápidas
-
-### Inicio de Sesión
-```markdown
-Voy a sincronizarme con Egregore para entender el contexto de este proyecto.
-
-<function_calls>
-<invoke name="recall_memory">
-<arg name="query">contexto y arquitectura del proyecto</arg>
-</invoke>
-</function_calls>
-```
-
-### Guardar Bugfix
-```markdown
-<function_calls>
-<invoke name="store_memory">
-<arg name="data">Bug: [descripción]. Causa: [raíz]. Solución: [fix]</arg>
-<arg name="context">bugfix</arg>
-<arg name="tags">[tecnología,componente]</arg>
-</invoke>
-</function_calls>
-```
-
-### Guardar Preferencia
-```markdown
-<function_calls>
-<invoke name="store_memory">
-<arg name="data">Usuario prefiere [preferencia] porque [razón]</arg>
-<arg name="context">preference</arg>
-<arg name="tags">[categoría]</arg>
-</invoke>
-</function_calls>
+┌─────────────┐                              ┌─────────────┐
+│ Claude Code │──MCP (stdio)──→ src/server.py│              │
+└─────────────┘                              │              │
+                                              │   Mem0      │
+┌─────────────┐                              │  (memory.py) │
+│  Dashboard  │──Neo4j driver──→ graph_client │              │
+└─────────────┘                              └──────┬───────┘
+                                                     │
+                            ┌──────────────────────────┴─────────┐
+                            ▼                                    ▼
+                     ┌──────────────┐                    ┌──────────────┐
+                     │  Memgraph    │◄──────────────────►│   Qdrant     │
+                     │  (Graph DB)  │                    │  (Vector DB) │
+                     └──────────────┘                    └──────────────┘
 ```
 
 ---
 
-*Egregore v0.1.0 - Hive Mind Memory System*
-*"La memoria colectiva es más sabia que cualquier individuo"*
+## Configuration
+
+Configuration is managed via `src/config.py` using Pydantic Settings:
+
+- Loads from `.env` file automatically
+- Singleton pattern: `get_settings()` returns cached instance
+- Key settings: `EMBEDDING_PROVIDER` (openai/gemini), `INSTANCE_NAME`, connection URIs
+
+The `.env` file should contain:
+- `EMBEDDING_API_KEY` - Required for embeddings
+- `INSTANCE_NAME` - Collection name in Qdrant
+- `MEMGRAPH_HOST`, `MEMGRAPH_PORT`, `QDRANT_HOST`, `QDRANT_PORT`
+
+---
+
+## Memgraph Cypher Notes
+
+When working with `GraphClient` or dashboard queries:
+
+- Nodes are labeled `Memory` with properties: `id`, `data`, `created_at`, `metadata`
+- Relationships can be any type (e.g., `RELATED_TO`, `DEPENDS_ON`, `FIXES`)
+- Use `MATCH (m:Memory)` for querying nodes
+- Use `DETACH DELETE` to delete nodes and their relationships
+- Memgraph is Neo4j-compatible - standard Cypher applies
+
+---
+
+## Dual Storage Sync
+
+**Important:** Memories added via MCP (`store_memory`) go through Mem0 and are stored in BOTH Memgraph (graph) and Qdrant (vector). Memories added via the dashboard (`GraphClient.create_memory`) are stored ONLY in Memgraph.
+
+This means:
+- Dashboard-only memories won't appear in semantic searches via `recall_memory`
+- MCP-added memories will appear in the dashboard (they're in Memgraph)
+- For consistency, prefer using MCP for memory storage when possible
+
+---
+
+## Entry Points
+
+- **MCP Server:** `python -m src.server` (or registered via `claude mcp add`)
+- **Dashboard:** `streamlit run src/dashboard.py` or `egregore-dashboard` command
+
+---
+
+## Code Style
+
+- Python 3.13 with type hints
+- Pydantic v2 for settings/validation
+- Ruff for linting (line length: 100)
+- mypy strict mode enabled
+- Singleton pattern used for clients (`get_memory()`, `get_graph_client()`)
+
+---
+
+## Testing
+
+Tests are in `tests/` using pytest. The GraphClient tests use mocks for the Neo4j driver since it requires a running Memgraph instance.
