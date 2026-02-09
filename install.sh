@@ -293,19 +293,19 @@ deploy_infrastructure() {
 
     # Start Docker services
     info "Starting Docker services (Memgraph + Qdrant)..."
-    docker compose up -d --wait
+    docker compose up -d
 
     if [ $? -eq 0 ]; then
-        success "Docker services are running"
+        success "Docker services started"
     else
         error "Failed to start Docker services"
         echo "Check logs with: docker compose logs"
         exit 1
     fi
 
-    # Wait a bit for services to be fully ready
+    # Wait for services to be fully ready
     info "Waiting for services to be fully ready..."
-    sleep 5
+    sleep 15
     success "Infrastructure deployed!"
 }
 
