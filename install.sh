@@ -252,6 +252,47 @@ interactive_config() {
         esac
     done
 
+    # Embedding model selection (for OpenAI)
+    if [ "$EMBEDDING_PROVIDER" = "openai" ]; then
+        echo ""
+        local model_choice
+        while true; do
+            echo -e "${BOLD}Which embedding model?${NC}"
+            echo "  [1] text-embedding-3-small (recommended, faster)"
+            echo "  [2] text-embedding-3-large (higher quality)"
+            echo "  [3] text-embedding-ada-002 (legacy)"
+            echo ""
+            read -rp "Enter choice [1-3]: " model_choice
+
+            case $model_choice in
+                1)
+                    EMBEDDING_MODEL="text-embedding-3-small"
+                    echo ""
+                    info "Selected: text-embedding-3-small"
+                    break
+                    ;;
+                2)
+                    EMBEDDING_MODEL="text-embedding-3-large"
+                    echo ""
+                    info "Selected: text-embedding-3-large"
+                    break
+                    ;;
+                3)
+                    EMBEDDING_MODEL="text-embedding-ada-002"
+                    echo ""
+                    info "Selected: text-embedding-ada-002 (legacy)"
+                    break
+                    ;;
+                *)
+                    warn "Invalid choice. Please enter 1, 2, or 3."
+                    ;;
+            esac
+        done
+    else
+        # For Gemini, use default model
+        EMBEDDING_MODEL="models/embedding-001"
+    fi
+
     # API Key input
     echo ""
     if [ "$EMBEDDING_PROVIDER" = "openai" ]; then
@@ -308,7 +349,7 @@ interactive_config() {
 
     if [ "$IS_REMOTE" = true ]; then
         # For remote servers, auto-detect IP and use 0.0.0.0
-        EREGORE_HOST="0.0.0.0"
+        CONFIG_HOST="0.0.0.0"
         SERVER_IP=$(detect_server_ip)
 
         if [ -n "$SERVER_IP" ]; then
@@ -321,19 +362,22 @@ interactive_config() {
     else
         # For local installations
         read -rp "  Host [default: 127.0.0.1 for local, 0.0.0.0 for network]: " server_host
-        EREGORE_HOST="${server_host:-127.0.0.1}"
-        SERVER_IP="$EGREGORE_HOST"
+        CONFIG_HOST="${server_host:-127.0.0.1}"
+        SERVER_IP="$CONFIG_HOST"
     fi
 
     read -rp "  Port [default: 9000]: " server_port
-    EREGORE_PORT="${server_port:-9000}"
-    success "Server will listen on $EGREGORE_HOST:$EGREGORE_PORT"
+    CONFIG_PORT="${server_port:-9000}"
+    success "Server will listen on $CONFIG_HOST:$CONFIG_PORT"
 
     # Generate .env file
-    generate_env_file
+    generate_env_file "$CONFIG_HOST" "$CONFIG_PORT"
 }
 
 generate_env_file() {
+    local config_host="$1"
+    local config_port="$2"
+
     info "Generating .env file..."
 
     cat > .env << EOF
@@ -346,10 +390,11 @@ INSTANCE_NAME=$INSTANCE_NAME
 # Embedding Provider
 EMBEDDING_PROVIDER=$EMBEDDING_PROVIDER
 EMBEDDING_API_KEY=$EMBEDDING_API_KEY
+EMBEDDING_MODEL=$EMBEDDING_MODEL
 
 # SSE Server Configuration
-EGREGORE_HOST=$EGREGORE_HOST
-EGREGORE_PORT=$EGREGORE_PORT
+EGREGORE_HOST=$config_host
+EGREGORE_PORT=$config_port
 
 # Qdrant (Vector Database)
 QDRANT_HOST=localhost
@@ -447,7 +492,7 @@ show_remote_client_instructions() {
     echo "  • Server IP:            $SERVER_IP"
     echo "  • SSE Endpoint:         $server_url"
     echo "  • Instance Name:        $INSTANCE_NAME"
-    echo "  • Port:                 $EGREGORE_PORT"
+    echo "  • Port:                 $CONFIG_PORT"
     echo ""
 
     # Show client setup instructions
@@ -651,7 +696,7 @@ show_final_instructions() {
     # Show status
     echo -e "${BOLD}System Status:${NC}"
     echo "  • Qdrant (Vector DB):   localhost:6333"
-    echo "  • SSE Server:           http://$EGREGORE_HOST:$EGREGORE_PORT/sse"
+    echo "  • SSE Server:           http://$CONFIG_HOST:$CONFIG_PORT/sse"
     echo "  • Instance Name:        $INSTANCE_NAME"
     echo ""
 
@@ -705,7 +750,7 @@ EOF
     # Multi-instance support
     echo -e "${BOLD}🌐 Multi-Instance Support:${NC}"
     echo "  Multiple Claude Code instances can connect to:"
-    echo "  http://<this-server-ip>:$EGREGORE_PORT/sse"
+    echo "  http://<this-server-ip>:$CONFIG_PORT/sse"
     echo ""
 
     echo -e "${GREEN}Happy coding with your hive mind! 🐝${NC}"

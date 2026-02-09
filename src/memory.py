@@ -67,7 +67,7 @@ class EgregoreMemory:
                 provider=provider,
                 config={
                     "api_key": self.settings.embedding_api_key.get_secret_value(),
-                    "model": "text-embedding-3-small" if provider == "openai" else "models/embedding-001",
+                    "model": self.settings.embedding_model if provider == "openai" else "models/embedding-001",
                 },
             ),
         )

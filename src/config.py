@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     embedding_api_key: SecretStr = Field(
         description="API key for the embedding provider",
     )
+    embedding_model: str = Field(
+        default="text-embedding-3-small",
+        description="Embedding model to use (e.g., text-embedding-3-small, text-embedding-3-large)",
+    )
 
     # Memgraph configuration
     memgraph_host: str = Field(default="localhost")
