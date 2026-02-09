@@ -1,0 +1,86 @@
+name: egregore
+version: 2.0.0
+description: Hive Mind Memory - Persistent graph memory for Claude Code
+author: Zurybr
+
+entry_point: src.main:main
+
+commands:
+  recall:
+    description: Search memories by semantic similarity
+    args:
+      - name: query
+        type: string
+        required: true
+        help: Search query
+      - name: limit
+        type: int
+        default: 5
+        help: Maximum results
+
+  store:
+    description: Store a new memory
+    args:
+      - name: data
+        type: string
+        required: true
+        help: Memory content
+      - name: context
+        type: string
+        default: ""
+        help: Context (bugfix, architecture, preference, learning)
+      - name: tags
+        type: string
+        default: ""
+        help: Comma-separated tags
+
+  search:
+    description: Advanced search with filters
+    args:
+      - name: query
+        type: string
+        required: true
+      - name: context
+        type: string
+        default: ""
+      - name: tags
+        type: string
+        default: ""
+
+  graph:
+    description: Visualize memory graph
+    args:
+      - name: query
+        type: string
+        default: "*"
+        help: Center graph around this query
+      - name: depth
+        type: int
+        default: 2
+        help: Relationship depth
+
+  status:
+    description: Check Egregore system health
+
+  recent:
+    description: Show recent memories
+    args:
+      - name: n
+        type: int
+        default: 10
+        help: Number of memories
+
+  stats:
+    description: Show memory statistics
+
+  interactive:
+    description: Start interactive memory mode
+
+  forget:
+    description: Remove a memory by ID
+    args:
+      - name: id
+        type: string
+        required: true
+
+system_prompt: prompts/system.md
