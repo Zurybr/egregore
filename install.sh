@@ -211,9 +211,17 @@ interactive_config() {
             continue
         fi
 
-        # Basic validation
-        if [ "$EMBEDDING_PROVIDER" = "openai" ] && [[ ! "$api_key" =~ ^sk- ]]; then
-            warn "OpenAI API keys typically start with 'sk-'"
+        # Basic validation - only warn if pattern doesn't match
+        key_valid=true
+        if [ "$EMBEDDING_PROVIDER" = "openai" ]; then
+            # Check if key starts with sk- (case insensitive)
+            if [[ ! "$api_key" =~ ^[Ss][Kk]- ]]; then
+                key_valid=false
+            fi
+        fi
+
+        if [ "$key_valid" = false ]; then
+            warn "API key doesn't match expected format for $EMBEDDING_PROVIDER"
             read -rp "Continue anyway? [y/N]: " confirm
             if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
                 continue
