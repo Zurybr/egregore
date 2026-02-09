@@ -51,6 +51,16 @@ class Settings(BaseSettings):
     qdrant_host: str = Field(default="localhost")
     qdrant_port: int = Field(default=6333)
 
+    # SSE Server configuration
+    egregore_host: str = Field(
+        default="0.0.0.0",
+        description="Host address for the Egregore SSE server to bind to",
+    )
+    egregore_port: int = Field(
+        default=9000,
+        description="Port for the Egregore SSE server to listen on",
+    )
+
     @property
     def memgraph_uri(self) -> str:
         """Build Memgraph connection URI."""

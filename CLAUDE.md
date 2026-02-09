@@ -39,8 +39,15 @@ streamlit run src/dashboard.py
 # or
 egregore-dashboard
 
-# Test the MCP server manually
-python -m src.server
+# Server management commands
+egregore-server start      # Start SSE server as daemon
+egregore-server stop       # Stop SSE server
+egregore-server status     # Check server status
+egregore-server restart    # Restart SSE server
+egregore-server logs -f    # View server logs
+
+# Initialize everything (run this after install)
+./init.sh
 ```
 
 ---
@@ -49,12 +56,13 @@ python -m src.server
 
 Egregore is a dual-path memory system with two separate access patterns:
 
-### Path 1: MCP Integration (Claude Code)
-- **Entry point:** `src/server.py` (FastMCP server)
+### Path 1: MCP Integration (Claude Code via SSE)
+- **Entry point:** `src/server.py` (FastMCP server with SSE transport)
 - **Client:** `src/memory.py` (Mem0 wrapper)
 - **Purpose:** Semantic search + graph-based memory storage via Mem0
 - **Tools:** `recall_memory()`, `store_memory()`, `health_check()`
-- **Flow:** Claude Code → FastMCP → Mem0 → (Memgraph + Qdrant)
+- **Flow:** Claude Code → FastMCP (SSE) → Mem0 → (Memgraph + Qdrant)
+- **Key feature:** Multiple Claude Code instances can connect to a single server
 
 ### Path 2: Web Dashboard (Direct Access)
 - **Entry point:** `src/dashboard.py` (Streamlit app)
@@ -67,20 +75,72 @@ Egregore is a dual-path memory system with two separate access patterns:
 ### Data Flow
 
 ```
-┌─────────────┐                              ┌─────────────┐
-│ Claude Code │──MCP (stdio)──→ src/server.py│              │
-└─────────────┘                              │              │
-                                              │   Mem0      │
-┌─────────────┐                              │  (memory.py) │
-│  Dashboard  │──Neo4j driver──→ graph_client │              │
-└─────────────┘                              └──────┬───────┘
-                                                     │
-                            ┌──────────────────────────┴─────────┐
-                            ▼                                    ▼
-                     ┌──────────────┐                    ┌──────────────┐
-                     │  Memgraph    │◄──────────────────►│   Qdrant     │
-                     │  (Graph DB)  │                    │  (Vector DB) │
-                     └──────────────┘                    └──────────────┘
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│ Claude Code  │     │ Claude Code  │     │ Claude Code  │
+│  (Local)     │     │  (Remote 1)  │     │  (Remote N)  │
+│              │     │              │     │              │
+│  SSE Client  │     │  SSE Client  │     │  SSE Client  │
+└──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+       │                    │                    │
+       └────────────────────┼────────────────────┘
+                            │
+                            ▼
+              ┌─────────────────────────┐
+              │  Egregore SSE Server    │
+              │  Port: 9000             │
+              │  Single instance        │
+              │  (singleton via lock)   │
+              └───────────┬─────────────┘
+                          │
+              ┌───────────┴───────────┐
+              │         Mem0          │
+              │    (src/memory.py)    │
+              └───────────┬───────────┘
+                          │
+        ┌─────────────────┴─────────────────┐
+        ▼                                   ▼
+┌──────────────┐                    ┌──────────────┐
+│  Memgraph    │◄──────────────────►│   Qdrant     │
+│  (Graph DB)  │                    │  (Vector DB) │
+└──────────────┘                    └──────────────┘
+       ▲
+       │
+┌──────────────┐
+│  Dashboard   │──Neo4j driver──→ graph_client
+└──────────────┘
+```
+
+---
+
+## SSE Server Architecture
+
+### Singleton Pattern
+The SSE server implements a singleton pattern using file locking:
+- **Lock file:** `/tmp/egregore.lock` (fcntl exclusive lock)
+- **PID file:** `/tmp/egregore.pid` (process ID for management)
+- **Log file:** `/tmp/egregore.log` (server logs)
+
+Only one instance can run at a time. Subsequent start attempts will fail with a clear error message.
+
+### Lifecycle Management
+The `egregore-server` CLI provides:
+- `start` - Start server as daemon (if not already running)
+- `stop` - Gracefully stop the server
+- `status` - Show server status and connection info
+- `restart` - Restart the server
+- `logs` - View/tail server logs
+
+### MCP Client Configuration
+Claude Code connects via SSE transport:
+```json
+{
+  "mcpServers": {
+    "egregore": {
+      "type": "sse",
+      "url": "http://localhost:9000/sse"
+    }
+  }
+}
 ```
 
 ---
@@ -92,11 +152,14 @@ Configuration is managed via `src/config.py` using Pydantic Settings:
 - Loads from `.env` file automatically
 - Singleton pattern: `get_settings()` returns cached instance
 - Key settings: `EMBEDDING_PROVIDER` (openai/gemini), `INSTANCE_NAME`, connection URIs
+- **New:** `EGREGORE_HOST` and `EGREGORE_PORT` for SSE server binding
 
 The `.env` file should contain:
 - `EMBEDDING_API_KEY` - Required for embeddings
 - `INSTANCE_NAME` - Collection name in Qdrant
 - `MEMGRAPH_HOST`, `MEMGRAPH_PORT`, `QDRANT_HOST`, `QDRANT_PORT`
+- `EGREGORE_HOST` - SSE server bind address (default: 0.0.0.0)
+- `EGREGORE_PORT` - SSE server port (default: 9000)
 
 ---
 
@@ -125,8 +188,9 @@ This means:
 
 ## Entry Points
 
-- **MCP Server:** `python -m src.server` (or registered via `claude mcp add`)
+- **SSE MCP Server:** `python -m src.server` or `egregore-server start`
 - **Dashboard:** `streamlit run src/dashboard.py` or `egregore-dashboard` command
+- **CLI Management:** `egregore-server` command group
 
 ---
 
@@ -143,3 +207,13 @@ This means:
 ## Testing
 
 Tests are in `tests/` using pytest. The GraphClient tests use mocks for the Neo4j driver since it requires a running Memgraph instance.
+
+---
+
+## Scripts Reference
+
+| Script | Purpose |
+|--------|---------|
+| `install.sh` | Full installation with interactive configuration |
+| `init.sh` | Quick initialization and server start |
+| `uninstall.sh` | Complete removal of Egregore |

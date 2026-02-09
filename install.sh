@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Egregore - Hive Mind Memory System Installer
-# One-command setup for persistent Claude Code memory
+# One-command setup for persistent Claude Code memory with SSE transport
 #
 
 set -e
@@ -241,6 +241,15 @@ interactive_config() {
     INSTANCE_NAME="${instance_name:-egregore_collective}"
     success "Instance name: $INSTANCE_NAME"
 
+    # SSE Server configuration
+    echo ""
+    echo -e "${BOLD}SSE Server Configuration:${NC}"
+    read -rp "  Host [default: 0.0.0.0]: " server_host
+    EREGORE_HOST="${server_host:-0.0.0.0}"
+    read -rp "  Port [default: 9000]: " server_port
+    EREGORE_PORT="${server_port:-9000}"
+    success "Server will listen on $EGREGORE_HOST:$EGREGORE_PORT"
+
     # Generate .env file
     generate_env_file
 }
@@ -258,6 +267,10 @@ INSTANCE_NAME=$INSTANCE_NAME
 # Embedding Provider
 EMBEDDING_PROVIDER=$EMBEDDING_PROVIDER
 EMBEDDING_API_KEY=$EMBEDDING_API_KEY
+
+# SSE Server Configuration
+EGREGORE_HOST=$EGREGORE_HOST
+EGREGORE_PORT=$EGREGORE_PORT
 
 # Memgraph (Graph Database)
 MEMGRAPH_HOST=localhost
@@ -309,19 +322,60 @@ deploy_infrastructure() {
     success "Infrastructure deployed!"
 }
 
-# ==================== STEP 4: CLAUDE CODE INTEGRATION ====================
+# ==================== STEP 4: START SSE SERVER ====================
 
-install_claude_mcp() {
-    step "Step 4/5: Installing Claude Code MCP Server"
+start_sse_server() {
+    step "Step 4/5: Starting SSE Server"
 
     local project_dir
     project_dir=$(get_abs_path ".")
-    local python_path="$project_dir/.venv/bin/python"
-    local server_path="$project_dir/src/server.py"
 
-    info "Project directory: $project_dir"
-    info "Python path: $python_path"
-    info "Server path: $server_path"
+    info "Starting Egregore SSE server..."
+
+    # Use the CLI if available
+    if [ -f "$project_dir/.venv/bin/egregore-server" ]; then
+        "$project_dir/.venv/bin/egregore-server" start
+    else
+        # Fallback: start directly
+        source .venv/bin/activate
+        export EGREGORE_HOST
+        export EGREGORE_PORT
+
+        nohup python -m src.server > /tmp/egregore.log 2>&1 &
+        local pid=$!
+
+        sleep 2
+
+        if ps -p "$pid" > /dev/null 2>&1; then
+            echo "$pid" > /tmp/egregore.pid
+            success "SSE server started (PID: $pid)"
+        else
+            error "Server failed to start. Check logs: /tmp/egregore.log"
+            exit 1
+        fi
+    fi
+
+    success "SSE server is running!"
+}
+
+# ==================== STEP 5: CLAUDE CODE INTEGRATION ====================
+
+install_claude_mcp() {
+    step "Step 5/5: Installing Claude Code MCP Client"
+
+    local project_dir
+    project_dir=$(get_abs_path ".")
+
+    # Build server URL
+    local client_host
+    if [ "$EGREGORE_HOST" = "0.0.0.0" ]; then
+        client_host="localhost"
+    else
+        client_host="$EGREGORE_HOST"
+    fi
+    local server_url="http://${client_host}:${EGREGORE_PORT}/sse"
+
+    info "Server URL: $server_url"
 
     # Configure MCP server globally in ~/.claude.json
     local claude_config="$HOME/.claude.json"
@@ -333,18 +387,16 @@ install_claude_mcp() {
     fi
 
     # Create or update ~/.claude.json with egregore MCP server
-    info "Configuring Egregore MCP server globally..."
+    info "Configuring Egregore MCP server (SSE transport)..."
 
     # Use jq if available, otherwise use python
     if command_exists jq; then
         # Create new config or update existing with jq
         if [ ! -f "$claude_config" ] || [ ! -s "$claude_config" ]; then
-            # Create new config with type: "stdio"
-            echo "{\"mcpServers\":{\"egregore\":{\"type\":\"stdio\",\"command\":\"$python_path\",\"args\":[\"$server_path\"]}}}" | jq '.' > "$claude_config"
+            echo "{\"mcpServers\":{\"egregore\":{\"type\":\"sse\",\"url\":\"$server_url\"}}}" | jq '.' > "$claude_config"
         else
-            # Update existing config with type: "stdio"
-            jq --arg python "$python_path" --arg server "$server_path" \
-                '.mcpServers.egregore = {"type": "stdio", "command": $python, "args": [$server]}' \
+            jq --arg url "$server_url" \
+                '.mcpServers.egregore = {"type": "sse", "url": $url}' \
                 "$claude_config" > "${claude_config}.tmp" && mv "${claude_config}.tmp" "$claude_config"
         fi
     else
@@ -354,8 +406,7 @@ import json
 import os
 
 config_file = "$claude_config"
-python_path = "$python_path"
-server_path = "$server_path"
+url = "$server_url"
 
 # Read existing config or create new
 if os.path.exists(config_file):
@@ -368,11 +419,10 @@ else:
 if 'mcpServers' not in config:
     config['mcpServers'] = {}
 
-# Add egregore server with type: "stdio"
+# Add egregore server with SSE transport
 config['mcpServers']['egregore'] = {
-    'type': 'stdio',
-    'command': python_path,
-    'args': [server_path]
+    'type': 'sse',
+    'url': url
 }
 
 # Write back to file
@@ -404,9 +454,8 @@ PYTHON_EOF
         echo -e "${CYAN}{${NC}"
         echo -e "${CYAN}  \"mcpServers\": {${NC}"
         echo -e "${CYAN}    \"egregore\": {${NC}"
-        echo -e "${CYAN}      \"type\": \"stdio\",${NC}"
-        echo -e "${CYAN}      \"command\": \"$python_path\",${NC}"
-        echo -e "${CYAN}      \"args\": [\"$server_path\"]${NC}"
+        echo -e "${CYAN}      \"type\": \"sse\",${NC}"
+        echo -e "${CYAN}      \"url\": \"$server_url\"${NC}"
         echo -e "${CYAN}    }${NC}"
         echo -e "${CYAN}  }${NC}"
         echo -e "${CYAN}}${NC}"
@@ -414,21 +463,22 @@ PYTHON_EOF
     fi
 }
 
-# ==================== STEP 5: FINAL INSTRUCTIONS ====================
+# ==================== STEP 6: FINAL INSTRUCTIONS ====================
 
 show_final_instructions() {
-    step "Step 5/5: Setup Complete!"
+    step "Setup Complete!"
 
     echo ""
-    echo -e "${GREEN}${BOLD}✨ Egregore is now ready!${NC}"
+    echo -e "${GREEN}${BOLD}✨ Egregore SSE Server is now ready!${NC}"
     echo ""
-    echo -e "${CYAN}Your hive mind memory is active and waiting for knowledge.${NC}"
+    echo -e "${CYAN}Your centralized hive mind is active and waiting for knowledge.${NC}"
     echo ""
 
     # Show status
     echo -e "${BOLD}System Status:${NC}"
     echo "  • Memgraph (Graph DB):  localhost:7687"
     echo "  • Qdrant (Vector DB):   localhost:6333"
+    echo "  • SSE Server:           http://$EGREGORE_HOST:$EGREGORE_PORT/sse"
     echo "  • Instance Name:        $INSTANCE_NAME"
     echo ""
 
@@ -460,18 +510,29 @@ EOF
     echo ""
 
     # Useful commands
-    echo -e "${BOLD}Useful Commands:${NC}"
+    echo -e "${BOLD}Server Management:${NC}"
+    echo "  View status:      egregore-server status"
+    echo "  Stop server:      egregore-server stop"
+    echo "  Restart server:   egregore-server restart"
+    echo "  View logs:        egregore-server logs -f"
+    echo ""
+
+    echo -e "${BOLD}Infrastructure:${NC}"
     echo "  View logs:        docker compose logs -f"
     echo "  Stop services:    docker compose down"
     echo "  Start services:   docker compose up -d"
-    echo "  Health check:     claude mcp list  # Should show 'egregore'"
     echo ""
 
     # Dashboard section
     echo -e "${BOLD}📊 Web Dashboard:${NC}"
-    echo "  Start dashboard:  source .venv/bin/activate && streamlit run src/dashboard.py"
-    echo "  Or use:           egregore-dashboard"
+    echo "  Start dashboard:  egregore-dashboard"
     echo "  Open at:          http://localhost:8501"
+    echo ""
+
+    # Multi-instance support
+    echo -e "${BOLD}🌐 Multi-Instance Support:${NC}"
+    echo "  Multiple Claude Code instances can connect to:"
+    echo "  http://<this-server-ip>:$EGREGORE_PORT/sse"
     echo ""
 
     echo -e "${GREEN}Happy coding with your hive mind! 🐝${NC}"
@@ -492,6 +553,7 @@ main() {
     check_prerequisites
     interactive_config
     deploy_infrastructure
+    start_sse_server
     install_claude_mcp
     show_final_instructions
 }

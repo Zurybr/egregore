@@ -6,13 +6,14 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "mem0ai[graph]>=0.1.0",
-    "fastmcp>=0.4.0",
+    "fastmcp[sse]>=0.4.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "streamlit>=1.40.0",
     "streamlit-agraph>=0.0.30",
     "neo4j>=5.0.0",
     "pandas>=2.0.0",
+    "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +26,7 @@ dev = [
 
 [project.scripts]
 egregore-dashboard = "src.dashboard:main"
+egregore-server = "src.cli:main"
 
 [build-system]
 requires = ["hatchling"]
