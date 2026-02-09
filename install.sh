@@ -323,19 +323,74 @@ install_claude_mcp() {
     info "Python path: $python_path"
     info "Server path: $server_path"
 
-    # Check if claude CLI is available
-    if command_exists claude; then
-        info "Registering Egregore with Claude Code..."
+    # Configure MCP server globally in ~/.claude.json
+    local claude_config="$HOME/.claude.json"
+    local claude_backup="$HOME/.claude.json.backup"
 
-        if claude mcp add egregore -- "$python_path" "$server_path"; then
-            success "Egregore registered with Claude Code!"
-            CLAUDE_INSTALLED=true
+    # Backup existing config if it exists
+    if [ -f "$claude_config" ]; then
+        cp "$claude_config" "$claude_backup"
+    fi
+
+    # Create or update ~/.claude.json with egregore MCP server
+    info "Configuring Egregore MCP server globally..."
+
+    # Use jq if available, otherwise use python
+    if command_exists jq; then
+        # Create new config or update existing with jq
+        if [ ! -f "$claude_config" ] || [ ! -s "$claude_config" ]; then
+            # Create new config
+            echo "{\"mcpServers\":{\"egregore\":{\"command\":\"$python_path\",\"args\":[\"$server_path\"]}}}" | jq '.' > "$claude_config"
         else
-            warn "Failed to automatically register with Claude Code"
-            CLAUDE_INSTALLED=false
+            # Update existing config
+            jq --arg python "$python_path" --arg server "$server_path" \
+                '.mcpServers.egregore = {"command": $python, "args": [$server]}' \
+                "$claude_config" > "${claude_config}.tmp" && mv "${claude_config}.tmp" "$claude_config"
         fi
     else
-        warn "Claude CLI not found in PATH"
+        # Fallback: use python to modify JSON
+        python3 << PYTHON_EOF
+import json
+import os
+
+config_file = "$claude_config"
+python_path = "$python_path"
+server_path = "$server_path"
+
+# Read existing config or create new
+if os.path.exists(config_file):
+    with open(config_file, 'r') as f:
+        config = json.load(f)
+else:
+    config = {}
+
+# Ensure mcpServers exists
+if 'mcpServers' not in config:
+    config['mcpServers'] = {}
+
+# Add egregore server
+config['mcpServers']['egregore'] = {
+    'command': python_path,
+    'args': [server_path]
+}
+
+# Write back to file
+with open(config_file, 'w') as f:
+    json.dump(config, f, indent=2)
+PYTHON_EOF
+    fi
+
+    # Verify the configuration
+    if [ -f "$claude_config" ]; then
+        success "Egregore MCP server configured globally in ~/.claude.json"
+        CLAUDE_INSTALLED=true
+
+        # Clean up backup on success
+        if [ -f "$claude_backup" ]; then
+            rm "$claude_backup"
+        fi
+    else
+        warn "Failed to configure Egregore MCP server"
         CLAUDE_INSTALLED=false
     fi
 
@@ -343,9 +398,9 @@ install_claude_mcp() {
         echo ""
         echo -e "${YELLOW}Manual installation required:${NC}"
         echo ""
-        echo "Run this command to register Egregore:"
+        echo "Add this to your ~/.claude.json:"
         echo ""
-        echo -e "${CYAN}  claude mcp add egregore -- $python_path $server_path${NC}"
+        echo -e "${CYAN}{\"mcpServers\": {\"egregore\": {\"command\": \"$python_path\", \"args\": [\"$server_path\"]}}}${NC}"
         echo ""
     fi
 }
@@ -373,22 +428,24 @@ show_final_instructions() {
     echo ""
     echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     cat << 'EOF'
-# EGREGORE PROTOCOL (Memoria Compartida)
+# EGREGORE PROTOCOL (Hive Mind Memory)
 
-## 🧠 Activación Cognitiva
-Este proyecto está conectado a **Egregore**, una memoria de colmena persistente.
-Tu primera acción en CUALQUIER sesión debe ser sincronizarte con la colmena.
+## REQUIRED: Before Starting Work
+Use `recall_memory(query)` before any task.
 
-## 🛠 Herramientas
-1. **`recall_memory(query)`**: Tu buscador. Úsalo antes de preguntar.
-   - *Cuándo usar:* Al iniciar sesión, antes de tomar decisiones técnicas, al encontrar errores.
-2. **`store_memory(data)`**: Tu grabadora. Úsalo para enseñar a la colmena.
-   - *Cuándo usar:* Al solucionar un bug, al definir arquitectura, al aprender preferencias del usuario.
+## Store Memories When:
+- Fixing a bug → problem + solution (context="bugfix")
+- Making an architecture decision (context="architecture")
+- Discovering a reusable pattern (context="learning")
+- Learning user preferences (context="preference")
 
-## 📜 Reglas de Oro
-- **No seas redundante:** Antes de guardar, verifica si ya lo sabemos.
-- **Sé explícito:** "Guardando en Egregore: La API corre en el puerto 8000".
-- **Confía en la Colmena:** Si Egregore dice que usamos una librería específica, úsala, a menos que el usuario te ordene lo contrario.
+**Required parameters:** `data`, `context`, and `tags` (comma-separated)
+
+### Available Tools
+- `recall_memory(query, limit)` - Search the hive mind
+- `store_memory(data, context, tags)` - Teach the collective
+
+→ Full documentation: https://github.com/Zurybr/egregore
 EOF
     echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
