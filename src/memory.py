@@ -3,6 +3,13 @@
 from typing import Any
 
 from mem0 import Memory
+from mem0.configs.base import (
+    MemoryConfig,
+    VectorStoreConfig,
+    GraphStoreConfig,
+    LlmConfig,
+    EmbedderConfig,
+)
 
 from src.config import Settings, get_settings
 
@@ -24,50 +31,54 @@ class EgregoreMemory:
         """Lazy initialization of Mem0 client."""
         if self._client is None:
             config = self._build_config()
-            self._client = Memory.from_config(config_dict=config)
+            self._client = Memory(config=config)
         return self._client
 
-    def _build_config(self) -> dict[str, Any]:
-        """Build Mem0 configuration dictionary."""
-        config: dict[str, Any] = {
-            "vector_store": {
-                "provider": "qdrant",
-                "config": {
+    def _build_config(self) -> MemoryConfig:
+        """Build Mem0 configuration."""
+        provider = self.settings.embedding_provider.value
+
+        # Use kuzu for graph store as it doesn't require authentication
+        # TODO: Switch to memgraph once authentication is configured
+        return MemoryConfig(
+            vector_store=VectorStoreConfig(
+                provider="qdrant",
+                config={
                     "collection_name": self.settings.instance_name,
                     "host": self.settings.qdrant_host,
                     "port": self.settings.qdrant_port,
                     "embedding_model_dims": 1536,  # OpenAI default
                 },
-            },
-            "graph_store": {
-                "provider": "memgraph",
-                "config": {
-                    "url": self.settings.memgraph_uri,
+            ),
+            graph_store=GraphStoreConfig(
+                provider="kuzu",
+                config={
+                    "db_path": "/tmp/egregore_kuzu.db",
                 },
-            },
-            "llm": {
-                "provider": self.settings.embedding_provider.value,
-                "config": {
+            ),
+            llm=LlmConfig(
+                provider=provider,
+                config={
                     "api_key": self.settings.embedding_api_key.get_secret_value(),
-                    "model": "gpt-4o-mini" if self.settings.embedding_provider.value == "openai" else "gemini-pro",
+                    "model": "gpt-4o-mini" if provider == "openai" else "gemini-pro",
                 },
-            },
-            "embedder": {
-                "provider": self.settings.embedding_provider.value,
-                "config": {
+            ),
+            embedder=EmbedderConfig(
+                provider=provider,
+                config={
                     "api_key": self.settings.embedding_api_key.get_secret_value(),
-                    "model": "text-embedding-3-small" if self.settings.embedding_provider.value == "openai" else "models/embedding-001",
+                    "model": "text-embedding-3-small" if provider == "openai" else "models/embedding-001",
                 },
-            },
-        }
-        return config
+            ),
+        )
 
-    def recall(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+    def recall(self, query: str, limit: int = 5, user_id: str = "egregore") -> list[dict[str, Any]]:
         """Search for memories matching the query.
 
         Args:
             query: Search query string
             limit: Maximum number of results to return
+            user_id: User ID for memory isolation (default: "egregore")
 
         Returns:
             List of matching memory entries
@@ -75,6 +86,7 @@ class EgregoreMemory:
         results = self.client.search(
             query=query,
             limit=limit,
+            user_id=user_id,
         )
         return results
 
@@ -82,12 +94,14 @@ class EgregoreMemory:
         self,
         data: str,
         metadata: dict[str, Any] | None = None,
+        user_id: str = "egregore",
     ) -> dict[str, Any]:
         """Store a new memory.
 
         Args:
             data: The memory content to store
             metadata: Optional metadata to attach
+            user_id: User ID for memory isolation (default: "egregore")
 
         Returns:
             Storage result with memory IDs
@@ -95,6 +109,7 @@ class EgregoreMemory:
         result = self.client.add(
             data,
             metadata=metadata or {},
+            user_id=user_id,
         )
         return result
 
@@ -107,7 +122,7 @@ class EgregoreMemory:
         # Basic connectivity check through a simple operation
         try:
             # Try to search (will fail if stores are down)
-            self.client.search("health_check", limit=1)
+            self.client.search("health_check", limit=1, user_id="health_check")
             return {"vector_store": True, "graph_store": True}
         except Exception as e:
             return {"vector_store": False, "graph_store": False, "error": str(e)}

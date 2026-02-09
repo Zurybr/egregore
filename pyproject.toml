@@ -14,6 +14,7 @@ dependencies = [
     "neo4j>=5.0.0",
     "pandas>=2.0.0",
     "psutil>=5.9.0",
+    "kuzu>=0.6.0",
 ]
 
 [project.optional-dependencies]

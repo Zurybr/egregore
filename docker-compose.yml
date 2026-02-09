@@ -1,16 +1,4 @@
 services:
-  memgraph:
-    image: memgraph/memgraph-mage:latest
-    container_name: egregore-memgraph
-    ports:
-      - "7687:7687"  # Bolt protocol
-      - "7444:7444"  # WebSocket for Lab
-    volumes:
-      - memgraph_data:/var/lib/memgraph
-    environment:
-      - MEMGRAPH="--telemetry-enabled=false"
-    restart: unless-stopped
-
   qdrant:
     image: qdrant/qdrant:latest
     container_name: egregore-qdrant
@@ -22,7 +10,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  memgraph_data:
-    name: egregore_memgraph_data
   qdrant_data:
     name: egregore_qdrant_data

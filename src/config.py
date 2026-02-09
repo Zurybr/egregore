@@ -2,9 +2,13 @@
 
 from enum import Enum
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Get project root for .env file location
+PROJECT_ROOT = Path(__file__).parent.parent
 
 
 class EmbeddingProvider(str, Enum):
@@ -21,7 +25,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
