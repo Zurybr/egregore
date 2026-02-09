@@ -156,14 +156,75 @@ install_uv() {
 
 # ==================== STEP 2: INTERACTIVE CONFIG ====================
 
+# Detect server IP automatically
+detect_server_ip() {
+    local detected_ip=""
+
+    # Try Tailscale first
+    if command_exists tailscale && tailscale ip >/dev/null 2>&1; then
+        detected_ip=$(tailscale ip -4 2>/dev/null | head -1)
+        if [ -n "$detected_ip" ]; then
+            echo "$detected_ip"
+            return 0
+        fi
+    fi
+
+    # Try common network interfaces (excluding localhost)
+    for interface in eth0 ens3 enp0s3 eno1; do
+        detected_ip=$(ip addr show "$interface" 2>/dev/null | grep "inet " | awk '{print $2}' | cut -d/ -f1 | head -1)
+        if [ -n "$detected_ip" ] && [ "$detected_ip" != "127.0.0.1" ]; then
+            echo "$detected_ip"
+            return 0
+        fi
+    done
+
+    # Fallback to hostname -I
+    detected_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    if [ -n "$detected_ip" ] && [ "$detected_ip" != "127.0.0.1" ]; then
+        echo "$detected_ip"
+        return 0
+    fi
+
+    return 1
+}
+
 interactive_config() {
-    step "Step 2/5: Interactive Configuration"
+    step "Step 2/6: Interactive Configuration"
 
     echo ""
     echo -e "${CYAN}Let's configure your Egregore instance...${NC}"
     echo ""
 
+    # Installation mode selection
+    local install_mode
+    while true; do
+        echo -e "${BOLD}Installation mode:${NC}"
+        echo "  [1] Local - For this machine only"
+        echo "  [2] Remote - Server for multiple clients (VPS, cloud, etc.)"
+        echo ""
+        read -rp "Enter choice [1-2]: " install_mode
+
+        case $install_mode in
+            1)
+                IS_REMOTE=false
+                echo ""
+                info "Selected: Local installation"
+                break
+                ;;
+            2)
+                IS_REMOTE=true
+                echo ""
+                info "Selected: Remote server installation"
+                break
+                ;;
+            *)
+                warn "Invalid choice. Please enter 1 or 2."
+                ;;
+        esac
+    done
+
     # Embedding provider selection
+    echo ""
     local provider_choice
     while true; do
         echo -e "${BOLD}Which embedding provider will you use?${NC}"
@@ -244,8 +305,26 @@ interactive_config() {
     # SSE Server configuration
     echo ""
     echo -e "${BOLD}SSE Server Configuration:${NC}"
-    read -rp "  Host [default: 0.0.0.0]: " server_host
-    EREGORE_HOST="${server_host:-0.0.0.0}"
+
+    if [ "$IS_REMOTE" = true ]; then
+        # For remote servers, auto-detect IP and use 0.0.0.0
+        EREGORE_HOST="0.0.0.0"
+        SERVER_IP=$(detect_server_ip)
+
+        if [ -n "$SERVER_IP" ]; then
+            echo -e "${GREEN}  Auto-detected IP: $SERVER_IP${NC}"
+            info "Server will bind to 0.0.0.0 (accessible from all networks)"
+        else
+            warn "Could not auto-detect IP address"
+            read -rp "  Enter server IP manually: " SERVER_IP
+        fi
+    else
+        # For local installations
+        read -rp "  Host [default: 127.0.0.1 for local, 0.0.0.0 for network]: " server_host
+        EREGORE_HOST="${server_host:-127.0.0.1}"
+        SERVER_IP="$EGREGORE_HOST"
+    fi
+
     read -rp "  Port [default: 9000]: " server_port
     EREGORE_PORT="${server_port:-9000}"
     success "Server will listen on $EGREGORE_HOST:$EGREGORE_PORT"
@@ -272,12 +351,6 @@ EMBEDDING_API_KEY=$EMBEDDING_API_KEY
 EGREGORE_HOST=$EGREGORE_HOST
 EGREGORE_PORT=$EGREGORE_PORT
 
-# Memgraph (Graph Database)
-MEMGRAPH_HOST=localhost
-MEMGRAPH_PORT=7687
-MEMGRAPH_USER=
-MEMGRAPH_PASSWORD=
-
 # Qdrant (Vector Database)
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
@@ -292,7 +365,7 @@ EOF
 # ==================== STEP 3: INFRASTRUCTURE ====================
 
 deploy_infrastructure() {
-    step "Step 3/5: Deploying Infrastructure"
+    step "Step 3/6: Deploying Infrastructure"
 
     # Create virtual environment
     info "Creating Python virtual environment..."
@@ -305,7 +378,7 @@ deploy_infrastructure() {
     success "Dependencies installed"
 
     # Start Docker services
-    info "Starting Docker services (Memgraph + Qdrant)..."
+    info "Starting Docker services (Qdrant)..."
     docker compose up -d
 
     if [ $? -eq 0 ]; then
@@ -325,7 +398,7 @@ deploy_infrastructure() {
 # ==================== STEP 4: START SSE SERVER ====================
 
 start_sse_server() {
-    step "Step 4/5: Starting SSE Server"
+    step "Step 4/6: Starting SSE Server"
 
     local project_dir
     project_dir=$(get_abs_path ".")
@@ -358,10 +431,101 @@ start_sse_server() {
     success "SSE server is running!"
 }
 
+# ==================== STEP 5B: REMOTE CLIENT INSTRUCTIONS ====================
+
+show_remote_client_instructions() {
+    local server_url="http://${SERVER_IP}:${EGREGORE_PORT}/sse"
+
+    echo ""
+    echo -e "${GREEN}${BOLD}✨ Remote Egregore Server is now ready!${NC}"
+    echo ""
+    echo -e "${CYAN}Your centralized hive mind is active and waiting for clients.${NC}"
+    echo ""
+
+    # Show server status
+    echo -e "${BOLD}Server Status:${NC}"
+    echo "  • Server IP:            $SERVER_IP"
+    echo "  • SSE Endpoint:         $server_url"
+    echo "  • Instance Name:        $INSTANCE_NAME"
+    echo "  • Port:                 $EGREGORE_PORT"
+    echo ""
+
+    # Show client setup instructions
+    echo -e "${BOLD}${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}CLIENT SETUP INSTRUCTIONS${NC}"
+    echo -e "${BOLD}${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+
+    echo -e "${CYAN}On your LOCAL machine, configure MCP in ~/.claude.json:${NC}"
+    echo ""
+    echo -e "${YELLOW}{${NC}"
+    echo -e "${YELLOW}  \"mcpServers\": {${NC}"
+    echo -e "${YELLOW}    \"egregore\": {${NC}"
+    echo -e "${YELLOW}      \"type\": \"sse\",${NC}"
+    echo -e "${YELLOW}      \"url\": \"$server_url\"${NC}"
+    echo -e "${YELLOW}    }${NC}"
+    echo -e "${YELLOW}  }${NC}"
+    echo -e "${YELLOW}}${NC}"
+    echo ""
+
+    echo -e "${CYAN}Create ~/.claude/memory/MEMORY.md with:${NC}"
+    echo ""
+    cat << 'EOF'
+# EGREGORE PROTOCOL (Hive Mind Memory)
+
+## ⚠️ MANDATORY - Before Starting ANY Work
+**ALWAYS use `recall_memory(query)` before ANY task.**
+
+## Store Memories When:
+- Fixing a bug → problem + solution (context="bugfix")
+- Making an architecture decision (context="architecture")
+- Discovering a reusable pattern (context="learning")
+- Learning user preferences (context="preference")
+
+**Required parameters:** `data`, `context`, and `tags` (comma-separated)
+
+### Available Tools
+- `health_check` - Check memory system status
+- `recall_memory(query, limit)` - Search the hive mind
+- `store_memory(data, context, tags)` - Teach the collective
+EOF
+    echo ""
+
+    echo -e "${CYAN}Test connection from your local machine:${NC}"
+    echo "  curl -I $server_url"
+    echo ""
+
+    echo -e "${BOLD}${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+
+    # Server management commands
+    echo -e "${BOLD}Server Management (on this server):${NC}"
+    echo "  View status:      egregore-server status"
+    echo "  Stop server:      egregore-server stop"
+    echo "  Restart server:   egregore-server restart"
+    echo "  View logs:        egregore-server logs -f"
+    echo ""
+
+    echo -e "${BOLD}Infrastructure:${NC}"
+    echo "  View logs:        docker compose logs -f"
+    echo "  Stop services:    docker compose down"
+    echo "  Start services:   docker compose up -d"
+    echo ""
+
+    echo -e "${GREEN}Server ready for remote connections! 🐝${NC}"
+    echo ""
+}
+
 # ==================== STEP 5: CLAUDE CODE INTEGRATION ====================
 
 install_claude_mcp() {
-    step "Step 5/5: Installing Claude Code MCP Client"
+    step "Step 5/6: Installing Claude Code MCP Client"
+
+    # For remote server, skip local MCP configuration
+    if [ "$IS_REMOTE" = true ]; then
+        show_remote_client_instructions
+        return 0
+    fi
 
     local project_dir
     project_dir=$(get_abs_path ".")
@@ -466,6 +630,16 @@ PYTHON_EOF
 # ==================== STEP 6: FINAL INSTRUCTIONS ====================
 
 show_final_instructions() {
+    # Skip detailed instructions for remote server (already shown)
+    if [ "$IS_REMOTE" = true ]; then
+        echo ""
+        echo -e "${GREEN}${BOLD}✨ Remote server setup complete!${NC}"
+        echo ""
+        echo -e "${CYAN}See client setup instructions above to connect your local machines.${NC}"
+        echo ""
+        return 0
+    fi
+
     step "Setup Complete!"
 
     echo ""
@@ -476,7 +650,6 @@ show_final_instructions() {
 
     # Show status
     echo -e "${BOLD}System Status:${NC}"
-    echo "  • Memgraph (Graph DB):  localhost:7687"
     echo "  • Qdrant (Vector DB):   localhost:6333"
     echo "  • SSE Server:           http://$EGREGORE_HOST:$EGREGORE_PORT/sse"
     echo "  • Instance Name:        $INSTANCE_NAME"
