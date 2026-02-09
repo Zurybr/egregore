@@ -356,6 +356,56 @@ The uninstall script handles both versions:
 ./uninstall.sh  # Removes stdio and SSE configurations
 ```
 
+## 🌐 Remote Server Setup
+
+For running Egregore on a separate server (VPS, cloud, etc.) with local clients:
+
+### On the Server
+
+```bash
+cd /path/to/egregore
+./init.sh --server-only
+```
+
+The `--server-only` flag:
+- Starts the SSE server on port 9000
+- Starts Docker services (Qdrant)
+- Shows client setup instructions
+- Does NOT configure local MCP/MEMORY.md
+
+### On Your Local Machine
+
+1. **Configure MCP** (`~/.claude.json`):
+```json
+{
+  "mcpServers": {
+    "egregore": {
+      "type": "sse",
+      "url": "http://<SERVER_IP>:9000/sse"
+    }
+  }
+}
+```
+
+2. **Create Memory Protocol** (`~/.claude/memory/MEMORY.md`):
+```bash
+mkdir -p ~/.claude/memory
+cat > ~/.claude/memory/MEMORY.md << 'EOF'
+# EGREGORE PROTOCOL (Hive Mind Memory)
+[... protocol content ...]
+EOF
+```
+
+3. **Optional CLI Tool**:
+```bash
+cd egregore/skill-egregore
+uv pip install -e .
+export EGREGORE_URL="http://<SERVER_IP>:9000"
+egregore interactive
+```
+
+**See:** [docs/CLIENT_SETUP.md](docs/CLIENT_SETUP.md) for detailed instructions.
+
 ## 🤝 Contributing
 
 Contributions welcome! Please read our [Contributing Guide](CONTRIBUTING.md).

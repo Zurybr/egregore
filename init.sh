@@ -19,6 +19,9 @@ BOLD='\033[1m'
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Mode flag
+SERVER_ONLY=false
+
 # Banner
 print_banner() {
     echo ""
@@ -95,14 +98,6 @@ check_docker_services() {
 
     local services_ok=true
 
-    # Check Memgraph
-    if docker ps | grep -q "memgraph"; then
-        success "Memgraph is running"
-    else
-        warn "Memgraph is not running"
-        services_ok=false
-    fi
-
     # Check Qdrant
     if docker ps | grep -q "qdrant"; then
         success "Qdrant is running"
@@ -120,7 +115,7 @@ check_docker_services() {
         sleep 10
 
         # Check again
-        if docker ps | grep -q "memgraph" && docker ps | grep -q "qdrant"; then
+        if docker ps | grep -q "qdrant"; then
             success "Services started successfully"
         else
             error "Failed to start services. Check with: docker compose logs"
@@ -197,9 +192,9 @@ start_server() {
     fi
 }
 
-# Configure MCP client
+# Configure MCP client (LOCAL MACHINE)
 configure_mcp() {
-    step "Configuring Claude Code MCP Client"
+    step "Configuring Claude Code MCP Client (LOCAL)"
 
     local settings
     settings=$(get_settings)
@@ -212,17 +207,19 @@ configure_mcp() {
     host="${host:-0.0.0.0}"
     port="${port:-9000}"
 
-    # Build the URL
-    # If host is 0.0.0.0, use localhost for the client
-    local client_host
-    if [ "$host" = "0.0.0.0" ]; then
-        client_host="localhost"
-    else
-        client_host="$host"
-    fi
-    local url="http://${client_host}:${port}/sse"
+    # Get server IP for remote connection
+    info "Detecting server IP..."
+    local server_ip
+    server_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    server_ip="${server_ip:-$(curl -s ifconfig.me 2>/dev/null || echo "localhost")}"
+
+    # Build the URL with server IP
+    local url="http://${server_ip}:${port}/sse"
 
     info "MCP Server URL: $url"
+    echo ""
+    echo -e "${YELLOW}If connecting from a different machine, replace the IP above.${NC}"
+    echo ""
 
     # Configure ~/.claude.json
     local claude_config="$HOME/.claude.json"
@@ -283,6 +280,106 @@ PYTHON_EOF
     fi
 }
 
+# Configure MEMORY.md (LOCAL MACHINE)
+configure_memory_md() {
+    step "Configuring Memory Protocol (LOCAL)"
+
+    local memory_dir="$HOME/.claude/memory"
+    local memory_file="$memory_dir/MEMORY.md"
+
+    # Create directory if it doesn't exist
+    mkdir -p "$memory_dir"
+
+    # Check if file already exists
+    if [ -f "$memory_file" ]; then
+        info "MEMORY.md already exists at $memory_file"
+        info "Skipping creation (edit manually to update)"
+        return 0
+    fi
+
+    # Create MEMORY.md with Egregore protocol
+    cat > "$memory_file" << 'EOF'
+# EGREGORE PROTOCOL (Hive Mind Memory)
+
+## ⚠️ MANDATORY - Before Starting ANY Work
+**ALWAYS use `recall_memory(query)` before ANY task.** This is not optional.
+
+Query examples:
+- User's name, preferences, or context
+- Project-specific information
+- Previous bugs fixed or patterns discovered
+- Architecture decisions made
+
+## Store Memories When:
+- Fixing a bug → problem + solution (context="bugfix")
+- Making an architecture decision (context="architecture")
+- Discovering a reusable pattern (context="learning")
+- Completing a feature (context="preference")
+- Learning user preferences (context="preference")
+
+**Required parameters:** `data`, `context`, and `tags` (comma-separated)
+
+### Available Tools
+- `health_check` - Check memory system status
+- `recall_memory(query, limit)` - Search the hive mind
+- `store_memory(data, context, tags)` - Teach the collective
+
+→ Full documentation: https://github.com/Zurybr/egregore
+EOF
+
+    success "MEMORY.md created at $memory_file"
+}
+
+# Configure CLAUDE.md (LOCAL MACHINE)
+configure_claude_md() {
+    step "Configuring CLAUDE.md (LOCAL)"
+
+    local claude_md="$HOME/.claude/CLAUDE.md"
+
+    # Check if EGREGORE section already exists
+    if [ -f "$claude_md" ] && grep -q "EGREGORE PROTOCOL" "$claude_md"; then
+        info "EGREGORE PROTOCOL already exists in CLAUDE.md"
+        info "Skipping (edit manually to update)"
+        return 0
+    fi
+
+    # Append EGREGORE section to CLAUDE.md
+    cat >> "$claude_md" << 'EOF'
+
+
+---
+
+# EGREGORE PROTOCOL (Hive Mind Memory)
+
+## ⚠️ MANDATORY - Before Starting ANY Work
+**ALWAYS use `recall_memory(query)` before ANY task.** This is not optional.
+
+Query examples:
+- User's name, preferences, or context
+- Project-specific information
+- Previous bugs fixed or patterns discovered
+- Architecture decisions made
+
+## Store Memories When:
+- Fixing a bug → problem + solution (context="bugfix")
+- Making an architecture decision (context="architecture")
+- Discovering a reusable pattern (context="learning")
+- Completing a feature (context="preference")
+- Learning user preferences (context="preference")
+
+**Required parameters:** `data`, `context`, and `tags` (comma-separated)
+
+### Available Tools
+- `health_check` - Check memory system status
+- `recall_memory(query, limit)` - Search the hive mind
+- `store_memory(data, context, tags)` - Teach the collective
+
+→ Full documentation: https://github.com/Zurybr/egregore
+EOF
+
+    success "EGREGORE PROTOCOL added to CLAUDE.md"
+}
+
 # Get settings from config
 get_settings() {
     if [ -f ".env" ]; then
@@ -291,6 +388,85 @@ get_settings() {
         echo "EGREGORE_HOST=0.0.0.0"
         echo "EGREGORE_PORT=9000"
     fi
+}
+
+# Show client setup instructions (for remote/standalone setup)
+show_client_setup_instructions() {
+    step "Local Client Setup Instructions"
+
+    local settings
+    settings=$(get_settings)
+    local port
+    port=$(echo "$settings" | grep EREGORE_PORT | cut -d= -f2)
+    port="${port:-9000}"
+
+    # Get server IP
+    local server_ip
+    server_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    server_ip="${server_ip:-<your-server-ip>}"
+
+    echo ""
+    echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${BOLD}${CYAN}  CLIENT SETUP INSTRUCTIONS (Run on your LOCAL machine)${NC}"
+    echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    echo -e "${BOLD}1. MCP Configuration (~/.claude.json)${NC}"
+    echo ""
+    echo "  Add this to your ~/.claude.json:"
+    echo ""
+    echo -e "${GREEN}{${NC}"
+    echo -e "${GREEN}  \"mcpServers\": {${NC}"
+    echo -e "${GREEN}    \"egregore\": {${NC}"
+    echo -e "${GREEN}      \"type\": \"sse\",${NC}"
+    echo -e "${GREEN}      \"url\": \"http://${server_ip}:${port}/sse\"${NC}"
+    echo -e "${GREEN}    }${NC}"
+    echo -e "${GREEN}  }${NC}"
+    echo -e "${GREEN}}${NC}"
+    echo ""
+
+    echo -e "${BOLD}2. Memory Protocol (~/.claude/memory/MEMORY.md)${NC}"
+    echo ""
+    echo "  Create the file with:"
+    echo ""
+    echo "  ${CYAN}mkdir -p ~/.claude/memory${NC}"
+    echo "  ${CYAN}cat > ~/.claude/memory/MEMORY.md << 'EOF'${NC}"
+    echo "  # EGREGORE PROTOCOL (Hive Mind Memory)"
+    echo ""
+    echo "  ## ⚠️ MANDATORY - Before Starting ANY Work"
+    echo "  **ALWAYS use \`recall_memory(query)\` before ANY task.**"
+    echo ""
+    echo "  [rest of protocol...]"
+    echo "  EOF"
+    echo ""
+
+    echo -e "${BOLD}3. CLAUDE.md Protocol (Optional)${NC}"
+    echo ""
+    echo "  Add EGREGORE section to your project CLAUDE.md files"
+    echo "  See: https://github.com/Zurybr/egregore#usage"
+    echo ""
+
+    echo -e "${BOLD}4. CLI Tool (Optional - cooler interface!)${NC}"
+    echo ""
+    echo "  On your local machine:"
+    echo ""
+    echo "  ${CYAN}cd /path/to/egregore/skill-egregore${NC}"
+    echo "  ${CYAN}uv pip install -e .${NC}"
+    echo "  ${CYAN}export EGREGORE_URL=\"http://${server_ip}:${port}\"${NC}"
+    echo "  ${CYAN}egregore interactive  # Start interactive mode${NC}"
+    echo ""
+
+    echo -e "${BOLD}5. Test Connection${NC}"
+    echo ""
+    echo "  From your local machine, test:"
+    echo ""
+    echo "  ${CYAN}curl http://${server_ip}:${port}/sse${NC}"
+    echo ""
+    echo "  Should return: text/event-stream response"
+    echo ""
+
+    echo -e "${YELLOW}Note: Replace '${server_ip}' with your actual server IP${NC}"
+    echo ""
 }
 
 # Show final status and instructions
@@ -303,6 +479,11 @@ show_status() {
     port=$(echo "$settings" | grep EREGORE_PORT | cut -d= -f2)
     port="${port:-9000}"
 
+    # Get server IP
+    local server_ip
+    server_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    server_ip="${server_ip:-localhost}"
+
     echo ""
     echo -e "${GREEN}${BOLD}✨ Egregore SSE Server is ready!${NC}"
     echo ""
@@ -311,25 +492,21 @@ show_status() {
     check_server_status
 
     echo ""
-    echo -e "${BOLD}Connection URL:${NC}"
-    echo "  http://localhost:${port}/sse"
+    echo -e "${BOLD}Connection URLs:${NC}"
+    echo "  Local:  http://localhost:${port}/sse"
+    echo "  Remote: http://${server_ip}:${port}/sse"
     echo ""
 
-    echo -e "${BOLD}Management Commands:${NC}"
+    echo -e "${BOLD}Server Management:${NC}"
     echo "  egregore-server status     - Check server status"
     echo "  egregore-server stop       - Stop the server"
     echo "  egregore-server restart    - Restart the server"
-    echo "  egregore-server logs       - View server logs"
+    echo "  egregore-server logs -f    - View server logs"
     echo ""
 
     echo -e "${BOLD}Dashboard:${NC}"
     echo "  egregore-dashboard         - Start web dashboard"
     echo "  http://localhost:8501      - Dashboard URL"
-    echo ""
-
-    echo -e "${BOLD}Multi-Instance Support:${NC}"
-    echo "  Multiple Claude Code instances can now connect to:"
-    echo "  http://<server-ip>:${port}/sse"
     echo ""
 
     echo -e "${CYAN}Happy coding with your centralized hive mind! 🐝${NC}"
@@ -340,6 +517,20 @@ show_status() {
 main() {
     print_banner
 
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --server-only)
+                SERVER_ONLY=true
+                shift
+                ;;
+            *)
+                # Unknown argument will be handled by the case at the end
+                break
+                ;;
+        esac
+    done
+
     check_project_directory
     check_venv
     check_docker_services
@@ -349,71 +540,154 @@ main() {
         start_server
     fi
 
-    # Configure MCP client
-    configure_mcp
+    if [ "$SERVER_ONLY" = true ]; then
+        # Show client setup instructions instead of configuring locally
+        show_client_setup_instructions
+        show_status
 
-    # Show final status
-    show_status
+        echo ""
+        echo -e "${YELLOW}${BOLD}═══════════════════════════════════════════════════════════${NC}"
+        echo -e "${YELLOW}${BOLD}  SERVER-ONLY MODE: Local MCP not configured${NC}"
+        echo -e "${YELLOW}${BOLD}═══════════════════════════════════════════════════════════${NC}"
+        echo ""
+        echo -e "${CYAN}Run the client setup steps above on your local machine.${NC}"
+        echo ""
+
+        # Pass any remaining arguments to the case statement
+        if [ $# -gt 0 ]; then
+            case "${1:-}" in
+                --status)
+                    check_server_status
+                    ;;
+                --start)
+                    start_server
+                    ;;
+                --stop)
+                    if command_exists egregore-server; then
+                        egregore-server stop
+                    elif [ -f "/tmp/egregore.pid" ]; then
+                        kill "$(cat /tmp/egregore.pid)" 2>/dev/null || true
+                        rm -f /tmp/egregore.pid /tmp/egregore.lock
+                        success "Server stopped"
+                    else
+                        warn "Server is not running"
+                    fi
+                    ;;
+                --restart)
+                    if command_exists egregore-server; then
+                        egregore-server restart
+                    else
+                        $0 --stop
+                        sleep 2
+                        $0 --start
+                    fi
+                    ;;
+                --logs)
+                    if command_exists egregore-server; then
+                        egregore-server logs -f
+                    elif [ -f "/tmp/egregore.log" ]; then
+                        tail -f /tmp/egregore.log
+                    else
+                        warn "No log file found"
+                    fi
+                    ;;
+            esac
+        fi
+    else
+        # Configure MCP client (local setup)
+        configure_mcp
+
+        # Configure MEMORY.md
+        configure_memory_md
+
+        # Configure CLAUDE.md
+        configure_claude_md
+
+        # Show final status
+        show_status
+    fi
 }
 
-# Handle command line arguments
-case "${1:-}" in
-    --status)
-        check_server_status
-        ;;
-    --start)
-        check_project_directory
-        check_venv
-        check_docker_services
-        start_server
-        ;;
-    --stop)
-        if command_exists egregore-server; then
-            egregore-server stop
-        elif [ -f "/tmp/egregore.pid" ]; then
-            kill "$(cat /tmp/egregore.pid)" 2>/dev/null || true
-            rm -f /tmp/egregore.pid /tmp/egregore.lock
-            success "Server stopped"
-        else
-            warn "Server is not running"
-        fi
-        ;;
-    --restart)
-        check_project_directory
-        check_venv
-        if command_exists egregore-server; then
-            egregore-server restart
-        else
-            $0 --stop
-            sleep 2
-            $0 --start
-        fi
-        ;;
-    --logs)
-        if command_exists egregore-server; then
-            egregore-server logs -f
-        elif [ -f "/tmp/egregore.log" ]; then
-            tail -f /tmp/egregore.log
-        else
-            warn "No log file found"
-        fi
-        ;;
-    ""|--help|-h)
-        main
-        ;;
-    *)
-        error "Unknown option: $1"
-        echo ""
-        echo "Usage: $0 [option]"
-        echo ""
-        echo "Options:"
-        echo "  (no option)  Initialize and start everything"
-        echo "  --status     Check server status"
-        echo "  --start      Start the server"
-        echo "  --stop       Stop the server"
-        echo "  --restart    Restart the server"
-        echo "  --logs       View server logs"
-        echo "  --help       Show this help message"
-        exit 1
-        ;;
-esac
+# Handle command line arguments (for legacy/single command usage)
+if [ "$SERVER_ONLY" = false ]; then
+    case "${1:-}" in
+        --server-only)
+            # Re-run main with server-only flag
+            main "$@"
+            exit $?
+            ;;
+    esac
+fi
+
+# Handle standalone flags (without full init)
+handle_standalone_flag() {
+    case "${1:-}" in
+        --status)
+            check_project_directory
+            check_server_status
+            ;;
+        --start)
+            check_project_directory
+            check_venv
+            check_docker_services
+            start_server
+            ;;
+        --stop)
+            if command_exists egregore-server; then
+                egregore-server stop
+            elif [ -f "/tmp/egregore.pid" ]; then
+                kill "$(cat /tmp/egregore.pid)" 2>/dev/null || true
+                rm -f /tmp/egregore.pid /tmp/egregore.lock
+                success "Server stopped"
+            else
+                warn "Server is not running"
+            fi
+            ;;
+        --restart)
+            check_project_directory
+            check_venv
+            if command_exists egregore-server; then
+                egregore-server restart
+            else
+                $0 --stop
+                sleep 2
+                $0 --start
+            fi
+            ;;
+        --logs)
+            if command_exists egregore-server; then
+                egregore-server logs -f
+            elif [ -f "/tmp/egregore.log" ]; then
+                tail -f /tmp/egregore.log
+            else
+                warn "No log file found"
+            fi
+            ;;
+        ""|--help|-h)
+            print_banner
+            echo "Usage: $0 [options]"
+            echo ""
+            echo "Options:"
+            echo "  (no option)     Initialize everything (server + local client)"
+            echo "  --server-only   Start server only (for remote server setup)"
+            echo "  --status        Check server status"
+            echo "  --start         Start the server"
+            echo "  --stop          Stop the server"
+            echo "  --restart       Restart the server"
+            echo "  --logs          View server logs (tail -f)"
+            echo "  --help          Show this help message"
+            exit 0
+            ;;
+        *)
+            # Unknown option - might be a flag for main()
+            return 1
+            ;;
+    esac
+    return 0
+}
+
+# Try to handle as standalone flag first
+if ! handle_standalone_flag "$@"; then
+    # If not a standalone flag, run main
+    main "$@"
+fi
