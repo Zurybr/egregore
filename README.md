@@ -34,8 +34,6 @@ with graph capabilities via Memgraph and vector search via Qdrant.
 └─────────────────────────────────────────────────────────────┘
 ```
 
----
-
 ## ✨ Features
 
 - 🧠 **Persistent Memory** - Knowledge survives across sessions
@@ -44,8 +42,6 @@ with graph capabilities via Memgraph and vector search via Qdrant.
 - 🚀 **One-Command Setup** - Interactive installer like `npm init`
 - 🔌 **Claude Code Native** - Seamless MCP integration
 - 🏗️ **Multi-Provider** - OpenAI or Google Gemini embeddings
-
----
 
 ## 🚀 Quick Start
 
@@ -73,8 +69,6 @@ The installer will:
 4. 🔌 Register Egregore with Claude Code
 5. 📋 Show you how to activate it in your projects
 
----
-
 ## 🛠️ Manual Setup (if you prefer)
 
 ```bash
@@ -95,8 +89,6 @@ docker-compose up -d
 # 5. Register with Claude Code
 claude mcp add egregore -- $(pwd)/.venv/bin/python $(pwd)/src/server.py
 ```
-
----
 
 ## 📖 Usage
 
@@ -140,8 +132,6 @@ recall_memory("cómo configurar CORS en FastAPI")
 # → "Egregore indica: En proyecto anterior usaste origins explícitos..."
 ```
 
----
-
 ## 🏗️ Architecture
 
 ```
@@ -179,8 +169,6 @@ recall_memory("cómo configurar CORS en FastAPI")
 └──────────────┘      └──────────────┘
 ```
 
----
-
 ## 📁 Project Structure
 
 ```
@@ -188,16 +176,18 @@ egregore/
 ├── src/
 │   ├── __init__.py
 │   ├── config.py          # Pydantic settings management
+│   ├── dashboard.py       # 🆕 Streamlit dashboard
+│   ├── graph_client.py    # 🆕 Direct Memgraph client
 │   ├── memory.py          # Mem0 client wrapper
 │   └── server.py          # FastMCP server
+├── docs/
+│   └── DASHBOARD.md       # 🆕 Dashboard documentation
 ├── docker-compose.yml     # Memgraph + Qdrant
 ├── pyproject.toml         # Python dependencies
 ├── install.sh             # Interactive installer ⭐
 ├── CLAUDE.md              # Template for your projects
 └── README.md              # This file
 ```
-
----
 
 ## ⚙️ Configuration
 
@@ -212,8 +202,6 @@ Environment variables (set in `.env`):
 | `MEMGRAPH_PORT` | Memgraph Bolt port | `7687` |
 | `QDRANT_HOST` | Qdrant hostname | `localhost` |
 | `QDRANT_PORT` | Qdrant HTTP port | `6333` |
-
----
 
 ## 🧪 Development
 
@@ -237,17 +225,39 @@ docker-compose down -v
 
 ---
 
+## 📊 Dashboard
+
+Egregore includes a web-based dashboard for visualizing and managing your memory graph.
+
+### Start the Dashboard
+
+```bash
+# Activate virtual environment
+source .venv/bin/activate
+
+# Start dashboard
+streamlit run src/dashboard.py
+```
+
+Then open http://localhost:8501 in your browser.
+
+### Dashboard Features
+
+- 🕸️ **Interactive Graph**: Visualize memory connections
+- ➕ **Add Memories**: Create new memories via web UI
+- 🔗 **Add Relations**: Connect memories with relationships
+- 📋 **List View**: Search and manage all memories
+- 📊 **Statistics**: View graph metrics
+
+See [docs/DASHBOARD.md](docs/DASHBOARD.md) for detailed documentation.
+
 ## 🤝 Contributing
 
 Contributions welcome! Please read our [Contributing Guide](CONTRIBUTING.md).
 
----
-
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file.
-
----
 
 ## 🙏 Acknowledgments
 
@@ -255,8 +265,6 @@ MIT License - see [LICENSE](LICENSE) file.
 - [Memgraph](https://memgraph.com) - High-performance graph database
 - [Qdrant](https://qdrant.tech) - Vector similarity search engine
 - [FastMCP](https://github.com/jlowin/fastmcp) - Fast MCP server framework
-
----
 
 <div align="center">
 
