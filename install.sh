@@ -458,6 +458,13 @@ EOF
     echo "  Health check:     claude mcp list  # Should show 'egregore'"
     echo ""
 
+    # Dashboard section
+    echo -e "${BOLD}📊 Web Dashboard:${NC}"
+    echo "  Start dashboard:  source .venv/bin/activate && streamlit run src/dashboard.py"
+    echo "  Or use:           egregore-dashboard"
+    echo "  Open at:          http://localhost:8501"
+    echo ""
+
     echo -e "${GREEN}Happy coding with your hive mind! 🐝${NC}"
     echo ""
 }
