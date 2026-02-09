@@ -82,11 +82,11 @@ check_prerequisites() {
     fi
 
     # Check Docker Compose
-    if command_exists docker-compose || docker compose version >/dev/null 2>&1; then
+    if command_exists docker compose || docker compose version >/dev/null 2>&1; then
         success "Docker Compose found"
     else
         error "Docker Compose is not installed"
-        missing+=("docker-compose")
+        missing+=("docker compose")
     fi
 
     # Check Python 3.13
@@ -293,13 +293,13 @@ deploy_infrastructure() {
 
     # Start Docker services
     info "Starting Docker services (Memgraph + Qdrant)..."
-    docker-compose up -d --wait
+    docker compose up -d --wait
 
     if [ $? -eq 0 ]; then
         success "Docker services are running"
     else
         error "Failed to start Docker services"
-        echo "Check logs with: docker-compose logs"
+        echo "Check logs with: docker compose logs"
         exit 1
     fi
 
@@ -395,9 +395,9 @@ EOF
 
     # Useful commands
     echo -e "${BOLD}Useful Commands:${NC}"
-    echo "  View logs:        docker-compose logs -f"
-    echo "  Stop services:    docker-compose down"
-    echo "  Start services:   docker-compose up -d"
+    echo "  View logs:        docker compose logs -f"
+    echo "  Stop services:    docker compose down"
+    echo "  Start services:   docker compose up -d"
     echo "  Health check:     claude mcp list  # Should show 'egregore'"
     echo ""
 
