@@ -339,12 +339,12 @@ install_claude_mcp() {
     if command_exists jq; then
         # Create new config or update existing with jq
         if [ ! -f "$claude_config" ] || [ ! -s "$claude_config" ]; then
-            # Create new config
-            echo "{\"mcpServers\":{\"egregore\":{\"command\":\"$python_path\",\"args\":[\"$server_path\"]}}}" | jq '.' > "$claude_config"
+            # Create new config with type: "stdio"
+            echo "{\"mcpServers\":{\"egregore\":{\"type\":\"stdio\",\"command\":\"$python_path\",\"args\":[\"$server_path\"]}}}" | jq '.' > "$claude_config"
         else
-            # Update existing config
+            # Update existing config with type: "stdio"
             jq --arg python "$python_path" --arg server "$server_path" \
-                '.mcpServers.egregore = {"command": $python, "args": [$server]}' \
+                '.mcpServers.egregore = {"type": "stdio", "command": $python, "args": [$server]}' \
                 "$claude_config" > "${claude_config}.tmp" && mv "${claude_config}.tmp" "$claude_config"
         fi
     else
@@ -368,8 +368,9 @@ else:
 if 'mcpServers' not in config:
     config['mcpServers'] = {}
 
-# Add egregore server
+# Add egregore server with type: "stdio"
 config['mcpServers']['egregore'] = {
+    'type': 'stdio',
     'command': python_path,
     'args': [server_path]
 }
@@ -403,6 +404,7 @@ PYTHON_EOF
         echo -e "${CYAN}{${NC}"
         echo -e "${CYAN}  \"mcpServers\": {${NC}"
         echo -e "${CYAN}    \"egregore\": {${NC}"
+        echo -e "${CYAN}      \"type\": \"stdio\",${NC}"
         echo -e "${CYAN}      \"command\": \"$python_path\",${NC}"
         echo -e "${CYAN}      \"args\": [\"$server_path\"]${NC}"
         echo -e "${CYAN}    }${NC}"

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from mem0 import MemoryClient
+from mem0 import Memory
 
 from src.config import Settings, get_settings
 
@@ -17,14 +17,14 @@ class EgregoreMemory:
             settings: Configuration settings. Uses cached settings if not provided.
         """
         self.settings = settings or get_settings()
-        self._client: MemoryClient | None = None
+        self._client: Memory | None = None
 
     @property
-    def client(self) -> MemoryClient:
+    def client(self) -> Memory:
         """Lazy initialization of Mem0 client."""
         if self._client is None:
             config = self._build_config()
-            self._client = MemoryClient.from_config(config_dict=config)
+            self._client = Memory.from_config(config_dict=config)
         return self._client
 
     def _build_config(self) -> dict[str, Any]:
