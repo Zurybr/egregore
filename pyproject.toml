@@ -9,6 +9,10 @@ dependencies = [
     "fastmcp>=0.4.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
+    "streamlit>=1.40.0",
+    "streamlit-agraph>=0.1.0",
+    "neo4j>=5.0.0",
+    "pandas>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -18,6 +22,9 @@ dev = [
     "ruff>=0.6.0",
     "mypy>=1.8.0",
 ]
+
+[project.scripts]
+egregore-dashboard = "src.dashboard:main"
 
 [build-system]
 requires = ["hatchling"]
