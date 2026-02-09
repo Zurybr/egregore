@@ -400,7 +400,14 @@ PYTHON_EOF
         echo ""
         echo "Add this to your ~/.claude.json:"
         echo ""
-        echo -e "${CYAN}{\"mcpServers\": {\"egregore\": {\"command\": \"$python_path\", \"args\": [\"$server_path\"]}}}${NC}"
+        echo -e "${CYAN}{${NC}"
+        echo -e "${CYAN}  \"mcpServers\": {${NC}"
+        echo -e "${CYAN}    \"egregore\": {${NC}"
+        echo -e "${CYAN}      \"command\": \"$python_path\",${NC}"
+        echo -e "${CYAN}      \"args\": [\"$server_path\"]${NC}"
+        echo -e "${CYAN}    }${NC}"
+        echo -e "${CYAN}  }${NC}"
+        echo -e "${CYAN}}${NC}"
         echo ""
     fi
 }
